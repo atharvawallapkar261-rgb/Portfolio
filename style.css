@@ -99,6 +99,8 @@ html {
     scroll-padding-top: var(--nav-height);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -109,6 +111,7 @@ body {
     background-color: var(--bg-primary);
     overflow-x: hidden;
     position: relative;
+    -webkit-overflow-scrolling: touch;
 }
 
 a {
@@ -1422,22 +1425,88 @@ button {
 /* ============================================
    SCROLL REVEAL ANIMATIONS
    ============================================ */
+
+/* Base reveal state */
 .reveal {
     opacity: 0;
-    transform: translateY(30px) scale(0.98);
-    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform, opacity;
 }
 
 .reveal--visible {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none !important;
 }
 
-.reveal--delay-1 { transition-delay: 0.1s; }
-.reveal--delay-2 { transition-delay: 0.2s; }
-.reveal--delay-3 { transition-delay: 0.3s; }
-.reveal--delay-4 { transition-delay: 0.4s; }
+/* Variant: Fade up (default) */
+.reveal--up {
+    transform: translateY(40px) scale(0.97);
+}
+
+/* Variant: Slide from left */
+.reveal--left {
+    transform: translateX(-60px) scale(0.97);
+}
+
+/* Variant: Slide from right */
+.reveal--right {
+    transform: translateX(60px) scale(0.97);
+}
+
+/* Variant: Zoom in */
+.reveal--zoom {
+    transform: scale(0.85);
+}
+
+/* Variant: Rotate in */
+.reveal--rotate {
+    transform: translateY(30px) rotate(-3deg) scale(0.97);
+    transform-origin: left bottom;
+}
+
+/* Cascade stagger delays — up to 8 items */
+.reveal--delay-1 { transition-delay: 0.08s; }
+.reveal--delay-2 { transition-delay: 0.16s; }
+.reveal--delay-3 { transition-delay: 0.24s; }
+.reveal--delay-4 { transition-delay: 0.32s; }
+.reveal--delay-5 { transition-delay: 0.40s; }
+.reveal--delay-6 { transition-delay: 0.48s; }
+.reveal--delay-7 { transition-delay: 0.56s; }
+.reveal--delay-8 { transition-delay: 0.64s; }
+
+/* Parallax depth — applied via JS scroll listener */
+.parallax-layer {
+    transition: transform 0.1s linear;
+    will-change: transform;
+}
+
+/* Typewriter effect */
+.typewriter {
+    overflow: hidden;
+    border-right: 2px solid var(--accent-primary);
+    white-space: nowrap;
+    width: 0;
+    transition: none;
+}
+
+.typewriter--active {
+    animation: typewrite 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+               blinkCaret 0.6s step-end infinite;
+}
+
+.typewriter--done {
+    border-right-color: transparent;
+}
+
+@keyframes typewrite {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+@keyframes blinkCaret {
+    0%, 100% { border-right-color: var(--accent-primary); }
+    50% { border-right-color: transparent; }
+}
 
 /* ============================================
    RESPONSIVE DESIGN
@@ -1831,5 +1900,126 @@ body.is-loading {
 
     a, button, .btn, .skill-card, .project-card, .about__card, .social-btn, .pill, .nav__link, .nav__toggle {
         cursor: none;
+    }
+}
+
+/* ============================================
+   120Hz PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+/* Content-visibility: skip rendering of off-screen sections */
+section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 800px;
+}
+
+/* GPU compositing for animated elements */
+.btn,
+.skill-card,
+.project-card,
+.about__card,
+.code-window,
+.terminal-window,
+.nav {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Touch targets — 44px minimum for mobile */
+@media (pointer: coarse) {
+    .btn {
+        min-height: 48px;
+        min-width: 48px;
+    }
+
+    .nav__link {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    .pill {
+        min-height: 36px;
+    }
+
+    .social-btn {
+        min-width: 48px;
+        min-height: 48px;
+    }
+
+    /* Reduce blur on mobile to save GPU */
+    .aurora__blob {
+        filter: blur(60px);
+    }
+
+    .ambient-glow {
+        filter: blur(80px);
+    }
+}
+
+/* Fast touch scrolling */
+.nav__links,
+.skills__grid,
+.projects__grid {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+/* ============================================
+   PREFERS REDUCED MOTION — Accessibility
+   Disable all animations for users who prefer it
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    html {
+        scroll-behavior: auto;
+    }
+
+    .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    .typewriter {
+        width: auto;
+        border-right: none;
+        overflow: visible;
+    }
+
+    .parallax-layer {
+        transform: none !important;
+    }
+
+    .code-window,
+    .terminal-window {
+        animation: none;
+    }
+
+    .aurora__blob {
+        animation: none;
+        opacity: 0.12;
+    }
+
+    .ambient-glow {
+        animation: none;
+    }
+
+    .particle-network {
+        display: none;
+    }
+
+    .cursor-dot,
+    .cursor-ring {
+        display: none !important;
     }
 }

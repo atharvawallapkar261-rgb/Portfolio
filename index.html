@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0e17">
     <title>Full Stack Developer & Core Programmer | Portfolio</title>
     <meta name="description"
         content="Portfolio of a Full Stack Developer specializing in Python, Java, SQL, and Data Structures & Algorithms in C. Building scalable web apps and optimizing algorithmic logic.">
@@ -15,6 +16,11 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Critical inline: prevent layout shift and FOUC */
+        .loader { position: fixed; inset: 0; z-index: 99999; background: #0a0e17; display: flex; align-items: center; justify-content: center; }
+        body.is-loading { overflow: hidden; }
+    </style>
 </head>
 
 <body>

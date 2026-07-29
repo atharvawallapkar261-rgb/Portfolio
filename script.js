@@ -139,46 +139,118 @@ function initNavigation() {
 
 /* ============================================
    SCROLL REVEAL ANIMATIONS
+   6 variants: fade-up, slide-left/right,
+   zoom-in, rotate-in, cascade stagger,
+   typewriter, parallax depth
    ============================================ */
 function initScrollReveal() {
-    // Add reveal class to elements
-    const revealElements = [
-        ...document.querySelectorAll('.skill-card'),
-        ...document.querySelectorAll('.project-card'),
-        ...document.querySelectorAll('.about__card'),
-        ...document.querySelectorAll('.about__terminal'),
-        ...document.querySelectorAll('.contact__form'),
-        ...document.querySelectorAll('.contact__info'),
-        ...document.querySelectorAll('.section__header'),
-    ];
 
-    revealElements.forEach((el, index) => {
-        el.classList.add('reveal');
-        // Add stagger delay within groups
-        const siblings = el.parentElement.children;
-        const siblingIndex = Array.from(siblings).indexOf(el);
-        if (siblingIndex < 4) {
-            el.classList.add(`reveal--delay-${siblingIndex + 1}`);
+    // ---- 1. Section headers: slide-up with typewriter on title ----
+    document.querySelectorAll('.section__header').forEach(header => {
+        header.classList.add('reveal', 'reveal--up');
+
+        // Typewriter on the section title
+        const title = header.querySelector('.section__title');
+        if (title) {
+            title.classList.add('typewriter');
         }
     });
 
-    // Intersection Observer for reveal
-    const observer = new IntersectionObserver(
+    // ---- 2. Skill cards: cascade stagger (wave effect) ----
+    document.querySelectorAll('.skill-card').forEach((card, i) => {
+        card.classList.add('reveal', 'reveal--zoom');
+        card.classList.add(`reveal--delay-${Math.min(i + 1, 8)}`);
+    });
+
+    // ---- 3. Project cards: alternate slide-left / slide-right ----
+    document.querySelectorAll('.project-card').forEach((card, i) => {
+        card.classList.add('reveal');
+        card.classList.add(i % 2 === 0 ? 'reveal--left' : 'reveal--right');
+        card.classList.add(`reveal--delay-${Math.min(i + 1, 8)}`);
+    });
+
+    // ---- 4. About cards: rotate-in with stagger ----
+    document.querySelectorAll('.about__card').forEach((card, i) => {
+        card.classList.add('reveal', 'reveal--rotate');
+        card.classList.add(`reveal--delay-${Math.min(i + 1, 8)}`);
+    });
+
+    // ---- 5. Terminal: zoom-in ----
+    document.querySelectorAll('.about__terminal').forEach(el => {
+        el.classList.add('reveal', 'reveal--zoom');
+    });
+
+    // ---- 6. Contact: slide from sides ----
+    document.querySelectorAll('.contact__form').forEach(el => {
+        el.classList.add('reveal', 'reveal--left');
+    });
+    document.querySelectorAll('.contact__info').forEach(el => {
+        el.classList.add('reveal', 'reveal--right');
+    });
+
+    // ---- Intersection Observer for reveal ----
+    const allReveals = document.querySelectorAll('.reveal');
+    const revealObserver = new IntersectionObserver(
         (entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('reveal--visible');
-                    observer.unobserve(entry.target);
+                    revealObserver.unobserve(entry.target);
                 }
             });
         },
-        {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        }
+        { threshold: 0.1, rootMargin: '0px 0px -60px 0px' }
     );
+    allReveals.forEach(el => revealObserver.observe(el));
 
-    revealElements.forEach(el => observer.observe(el));
+    // ---- Typewriter Observer ----
+    const typewriterElements = document.querySelectorAll('.typewriter');
+    const typeObserver = new IntersectionObserver(
+        (entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('typewriter--active');
+                    // Remove caret after animation finishes
+                    entry.target.addEventListener('animationend', (e) => {
+                        if (e.animationName === 'typewrite') {
+                            entry.target.classList.add('typewriter--done');
+                        }
+                    }, { once: true });
+                    typeObserver.unobserve(entry.target);
+                }
+            });
+        },
+        { threshold: 0.5 }
+    );
+    typewriterElements.forEach(el => typeObserver.observe(el));
+
+    // ---- Parallax Depth Scrolling ----
+    if (window.innerWidth > 768) {
+        const sections = document.querySelectorAll('section');
+        sections.forEach((section, i) => {
+            // Alternate speeds: odd sections move slower for depth
+            const speed = (i % 2 === 0) ? 0.03 : -0.02;
+            section.dataset.parallaxSpeed = speed;
+            section.classList.add('parallax-layer');
+        });
+
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const scrollY = window.scrollY;
+                    sections.forEach(section => {
+                        const speed = parseFloat(section.dataset.parallaxSpeed);
+                        const rect = section.getBoundingClientRect();
+                        const offset = (rect.top + rect.height / 2 - window.innerHeight / 2) * speed;
+                        section.style.transform = `translateY(${offset}px)`;
+                    });
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    }
 }
 
 /* ============================================
@@ -294,37 +366,46 @@ function initSmoothScroll() {
    PARALLAX & MOUSE EFFECTS
    ============================================ */
 function initParallax() {
+    // Skip on mobile entirely
+    if (window.innerWidth <= 1024) return;
+
     const codeWindow = document.querySelector('.code-window');
 
-    // Subtle tilt on the code-window — layers on top of the CSS floatingDrift
-    if (codeWindow && window.innerWidth > 1024) {
+    // Subtle tilt on the code-window
+    if (codeWindow) {
+        let tiltX = 0, tiltY = 0, targetTiltX = 0, targetTiltY = 0;
+
         document.addEventListener('mousemove', (e) => {
-            const { clientX, clientY } = e;
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
-
-            const moveX = (clientX - centerX) / 80;
-            const moveY = (clientY - centerY) / 80;
-
-            requestAnimationFrame(() => {
-                codeWindow.style.transform = `perspective(1000px) rotateY(${moveX * 0.3}deg) rotateX(${-moveY * 0.3}deg)`;
-            });
-        });
-    }
-
-    // Parallax ambient glows
-    const glows = document.querySelectorAll('.ambient-glow');
-    if (window.innerWidth > 768) {
-        window.addEventListener('scroll', () => {
-            const scrollY = window.scrollY;
-            glows.forEach((glow, i) => {
-                const speed = (i + 1) * 0.05;
-                requestAnimationFrame(() => {
-                    glow.style.transform = `translateY(${scrollY * speed}px)`;
-                });
-            });
+            targetTiltX = (e.clientX - centerX) / 80 * 0.3;
+            targetTiltY = -(e.clientY - centerY) / 80 * 0.3;
         }, { passive: true });
+
+        function animateTilt() {
+            tiltX += (targetTiltX - tiltX) * 0.08;
+            tiltY += (targetTiltY - tiltY) * 0.08;
+            codeWindow.style.transform = `perspective(1000px) rotateY(${tiltX}deg) rotateX(${tiltY}deg)`;
+            requestAnimationFrame(animateTilt);
+        }
+        requestAnimationFrame(animateTilt);
     }
+
+    // Parallax ambient glows — throttled
+    const glows = document.querySelectorAll('.ambient-glow');
+    let glowTicking = false;
+    window.addEventListener('scroll', () => {
+        if (!glowTicking) {
+            requestAnimationFrame(() => {
+                const scrollY = window.scrollY;
+                glows.forEach((glow, i) => {
+                    glow.style.transform = `translateY(${scrollY * (i + 1) * 0.05}px)`;
+                });
+                glowTicking = false;
+            });
+            glowTicking = true;
+        }
+    }, { passive: true });
 }
 
 /* ============================================
@@ -383,10 +464,14 @@ function initCustomCursor() {
         ring.classList.remove('cursor-ring--hidden');
     });
 
-    // LERP animation loop for the ring
-    function animateRing() {
-        ringX += (mouseX - ringX) * lerpFactor;
-        ringY += (mouseY - ringY) * lerpFactor;
+    // LERP animation loop for the ring — frame-rate independent
+    let lastTime = performance.now();
+    function animateRing(now) {
+        const dt = Math.min((now - lastTime) / 16.67, 2); // normalize to 60fps baseline
+        lastTime = now;
+
+        ringX += (mouseX - ringX) * lerpFactor * dt;
+        ringY += (mouseY - ringY) * lerpFactor * dt;
 
         ring.style.left = `${ringX}px`;
         ring.style.top = `${ringY}px`;
@@ -441,17 +526,14 @@ function initCardSpotlight() {
     spotlightCards.forEach(card => {
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
+            card.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+            card.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+        }, { passive: true });
 
         card.addEventListener('mouseleave', () => {
             card.style.removeProperty('--mouse-x');
             card.style.removeProperty('--mouse-y');
-        });
+        }, { passive: true });
     });
 }
 
@@ -464,99 +546,152 @@ function initParticleNetwork() {
     const canvas = document.getElementById('particleCanvas');
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
 
-    // Config
+    // Detect device capability
+    const isMobile = window.innerWidth < 768;
+    const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
+
+    // Adaptive config based on device
     const CONFIG = {
-        particleCount: Math.min(80, Math.floor(window.innerWidth / 18)),
-        connectionDistance: 140,
+        particleCount: isMobile ? 30 : isTablet ? 50 : Math.min(80, Math.floor(window.innerWidth / 18)),
+        connectionDistance: isMobile ? 100 : 140,
         mouseRadius: 180,
         mouseRepelStrength: 0.02,
         particleSpeed: 0.3,
         particleMinSize: 1,
-        particleMaxSize: 2.5,
+        particleMaxSize: isMobile ? 2 : 2.5,
         lineOpacity: 0.12,
         dotOpacity: 0.4,
-        accentColor: { r: 108, g: 92, b: 231 },   // --accent-primary
-        tealColor: { r: 0, g: 206, b: 201 },       // --accent-secondary
+        accentColor: { r: 108, g: 92, b: 231 },
+        tealColor: { r: 0, g: 206, b: 201 },
     };
+
+    // Pre-cache color strings to avoid per-frame concatenation
+    const accentStr = `${CONFIG.accentColor.r}, ${CONFIG.accentColor.g}, ${CONFIG.accentColor.b}`;
+    const tealStr = `${CONFIG.tealColor.r}, ${CONFIG.tealColor.g}, ${CONFIG.tealColor.b}`;
 
     let width, height;
     let particles = [];
     let mouse = { x: -1000, y: -1000 };
     let animId;
 
-    // Resize handler
+    // Debounced resize
+    let resizeTimeout;
     function resize() {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
     }
     resize();
     window.addEventListener('resize', () => {
-        resize();
-        // Re-create particles if count changed significantly
-        const newCount = Math.min(80, Math.floor(window.innerWidth / 18));
-        if (Math.abs(newCount - particles.length) > 10) {
-            particles = createParticles(newCount);
-        }
-    });
-
-    // Mouse tracking
-    document.addEventListener('mousemove', (e) => {
-        mouse.x = e.clientX;
-        mouse.y = e.clientY;
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            resize();
+            const newCount = isMobile ? 30 : isTablet ? 50 : Math.min(80, Math.floor(window.innerWidth / 18));
+            if (Math.abs(newCount - particles.length) > 10) {
+                particles = createParticles(newCount);
+            }
+        }, 200);
     }, { passive: true });
 
-    document.addEventListener('mouseleave', () => {
-        mouse.x = -1000;
-        mouse.y = -1000;
-    });
+    // Mouse tracking — skip on mobile
+    if (!isMobile) {
+        document.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        }, { passive: true });
 
-    // Create particles
+        document.addEventListener('mouseleave', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+    }
+
+    // Create particles with pre-cached color strings
     function createParticles(count) {
         const arr = [];
         for (let i = 0; i < count; i++) {
             const useTeal = Math.random() < 0.3;
-            const color = useTeal ? CONFIG.tealColor : CONFIG.accentColor;
+            const colorStr = useTeal ? tealStr : accentStr;
+            const alpha = 0.2 + Math.random() * (CONFIG.dotOpacity - 0.2);
             arr.push({
                 x: Math.random() * width,
                 y: Math.random() * height,
                 vx: (Math.random() - 0.5) * CONFIG.particleSpeed,
                 vy: (Math.random() - 0.5) * CONFIG.particleSpeed,
                 size: CONFIG.particleMinSize + Math.random() * (CONFIG.particleMaxSize - CONFIG.particleMinSize),
-                color: color,
-                alpha: 0.2 + Math.random() * (CONFIG.dotOpacity - 0.2),
+                fillStyle: `rgba(${colorStr}, ${alpha})`,
             });
         }
         return arr;
     }
     particles = createParticles(CONFIG.particleCount);
 
-    // Animation loop
+    // Spatial grid for O(n) connection checks
+    const gridCellSize = CONFIG.connectionDistance;
+    let grid = {};
+
+    function buildGrid() {
+        grid = {};
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            const cellX = Math.floor(p.x / gridCellSize);
+            const cellY = Math.floor(p.y / gridCellSize);
+            const key = `${cellX},${cellY}`;
+            if (!grid[key]) grid[key] = [];
+            grid[key].push(i);
+        }
+    }
+
+    function getNeighborIndices(p) {
+        const cellX = Math.floor(p.x / gridCellSize);
+        const cellY = Math.floor(p.y / gridCellSize);
+        const neighbors = [];
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const key = `${cellX + dx},${cellY + dy}`;
+                if (grid[key]) {
+                    for (let k = 0; k < grid[key].length; k++) {
+                        neighbors.push(grid[key][k]);
+                    }
+                }
+            }
+        }
+        return neighbors;
+    }
+
+    // Animation loop — optimized for 120Hz
+    const connDistSq = CONFIG.connectionDistance * CONFIG.connectionDistance;
+    const mouseRadSq = CONFIG.mouseRadius * CONFIG.mouseRadius;
+
     function animate() {
         ctx.clearRect(0, 0, width, height);
+        buildGrid();
 
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
 
-            // Mouse repulsion
-            const dx = p.x - mouse.x;
-            const dy = p.y - mouse.y;
-            const distMouse = Math.sqrt(dx * dx + dy * dy);
-            if (distMouse < CONFIG.mouseRadius && distMouse > 0) {
-                const force = (CONFIG.mouseRadius - distMouse) / CONFIG.mouseRadius;
-                p.vx += (dx / distMouse) * force * CONFIG.mouseRepelStrength;
-                p.vy += (dy / distMouse) * force * CONFIG.mouseRepelStrength;
+            // Mouse repulsion — squared distance (no sqrt)
+            if (!isMobile) {
+                const dx = p.x - mouse.x;
+                const dy = p.y - mouse.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < mouseRadSq && distSq > 0) {
+                    const dist = Math.sqrt(distSq);
+                    const force = (CONFIG.mouseRadius - dist) / CONFIG.mouseRadius;
+                    p.vx += (dx / dist) * force * CONFIG.mouseRepelStrength;
+                    p.vy += (dy / dist) * force * CONFIG.mouseRepelStrength;
+                }
             }
 
-            // Dampen velocity
+            // Dampen
             p.vx *= 0.99;
             p.vy *= 0.99;
 
-            // Enforce min speed so particles don't stall
-            const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            if (speed < 0.1) {
-                const angle = Math.random() * Math.PI * 2;
+            // Min speed
+            const speedSq = p.vx * p.vx + p.vy * p.vy;
+            if (speedSq < 0.01) {
+                const angle = Math.random() * 6.2832;
                 p.vx = Math.cos(angle) * 0.15;
                 p.vy = Math.sin(angle) * 0.15;
             }
@@ -565,31 +700,34 @@ function initParticleNetwork() {
             p.x += p.vx;
             p.y += p.vy;
 
-            // Wrap around edges
+            // Wrap
             if (p.x < -20) p.x = width + 20;
-            if (p.x > width + 20) p.x = -20;
+            else if (p.x > width + 20) p.x = -20;
             if (p.y < -20) p.y = height + 20;
-            if (p.y > height + 20) p.y = -20;
+            else if (p.y > height + 20) p.y = -20;
 
-            // Draw particle
+            // Draw dot
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.alpha})`;
+            ctx.arc(p.x, p.y, p.size, 0, 6.2832);
+            ctx.fillStyle = p.fillStyle;
             ctx.fill();
 
-            // Draw connections to nearby particles
-            for (let j = i + 1; j < particles.length; j++) {
+            // Draw connections via spatial grid
+            const neighbors = getNeighborIndices(p);
+            for (let k = 0; k < neighbors.length; k++) {
+                const j = neighbors[k];
+                if (j <= i) continue;
                 const p2 = particles[j];
-                const connDx = p.x - p2.x;
-                const connDy = p.y - p2.y;
-                const dist = Math.sqrt(connDx * connDx + connDy * connDy);
+                const cdx = p.x - p2.x;
+                const cdy = p.y - p2.y;
+                const dSq = cdx * cdx + cdy * cdy;
 
-                if (dist < CONFIG.connectionDistance) {
-                    const opacity = (1 - dist / CONFIG.connectionDistance) * CONFIG.lineOpacity;
+                if (dSq < connDistSq) {
+                    const opacity = (1 - Math.sqrt(dSq) / CONFIG.connectionDistance) * CONFIG.lineOpacity;
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
                     ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `rgba(${CONFIG.accentColor.r}, ${CONFIG.accentColor.g}, ${CONFIG.accentColor.b}, ${opacity})`;
+                    ctx.strokeStyle = `rgba(${accentStr}, ${opacity})`;
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
@@ -600,7 +738,7 @@ function initParticleNetwork() {
     }
     animate();
 
-    // Pause when tab is not visible for performance
+    // Pause when tab is not visible
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             cancelAnimationFrame(animId);
