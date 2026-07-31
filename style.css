@@ -1907,11 +1907,9 @@ body.is-loading {
    120Hz PERFORMANCE OPTIMIZATIONS
    ============================================ */
 
-/* Content-visibility: skip rendering of off-screen sections */
-section {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 800px;
-}
+/* Content-visibility removed — it was causing scroll-reveal animations
+   to reset when scrolling back up, because the browser skips rendering
+   off-screen sections and destroys their painted (animated) state. */
 
 /* GPU compositing for animated elements */
 .btn,
