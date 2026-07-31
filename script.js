@@ -2,7 +2,39 @@
    PORTFOLIO INTERACTIVE SCRIPTS
    ============================================ */
 
+/* ============================================
+   UNIFIED SCROLL CONTROLLER
+   Single rAF-gated scroll listener to replace
+   5 separate listeners fighting for the main thread
+   ============================================ */
+const ScrollController = {
+    y: 0,
+    callbacks: [],
+    _ticking: false,
+
+    init() {
+        window.addEventListener('scroll', () => {
+            if (!this._ticking) {
+                requestAnimationFrame(() => {
+                    this.y = window.scrollY;
+                    for (let i = 0; i < this.callbacks.length; i++) {
+                        this.callbacks[i](this.y);
+                    }
+                    this._ticking = false;
+                });
+                this._ticking = true;
+            }
+        }, { passive: true });
+    },
+
+    add(fn) {
+        this.callbacks.push(fn);
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+    initThemeToggle();
+    ScrollController.init();
     initLoader(() => {
         initNavigation();
         initScrollReveal();
@@ -82,19 +114,14 @@ function initNavigation() {
     const navLinks = document.getElementById('navLinks');
     const navLinkElements = document.querySelectorAll('.nav__link');
 
-    // Scroll-based navigation styling
-    let lastScroll = 0;
-    window.addEventListener('scroll', () => {
-        const currentScroll = window.scrollY;
-
-        if (currentScroll > 50) {
+    // Scroll-based nav styling — via unified ScrollController (no separate listener)
+    ScrollController.add((scrollY) => {
+        if (scrollY > 50) {
             nav.classList.add('nav--scrolled');
         } else {
             nav.classList.remove('nav--scrolled');
         }
-
-        lastScroll = currentScroll;
-    }, { passive: true });
+    });
 
     // Mobile menu toggle
     navToggle.addEventListener('click', () => {
@@ -112,12 +139,11 @@ function initNavigation() {
         });
     });
 
-    // Active link tracking based on scroll position
+    // Active link tracking — via unified ScrollController
     const sections = document.querySelectorAll('section[id]');
 
-    function updateActiveLink() {
-        const scrollPos = window.scrollY + 150;
-
+    ScrollController.add((scrollY) => {
+        const scrollPos = scrollY + 150;
         sections.forEach(section => {
             const top = section.offsetTop;
             const height = section.offsetHeight;
@@ -132,9 +158,7 @@ function initNavigation() {
                 });
             }
         });
-    }
-
-    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    });
 }
 
 /* ============================================
@@ -188,6 +212,12 @@ function initScrollReveal() {
         el.classList.add('reveal', 'reveal--right');
     });
 
+    // ---- 7. Blog cards: fade-up with stagger ----
+    document.querySelectorAll('.blog-card').forEach((card, i) => {
+        card.classList.add('reveal', 'reveal--up');
+        card.classList.add(`reveal--delay-${Math.min(i + 1, 8)}`);
+    });
+
     // ---- Intersection Observer for reveal ----
     const allReveals = document.querySelectorAll('.reveal');
     const revealObserver = new IntersectionObserver(
@@ -224,33 +254,9 @@ function initScrollReveal() {
     );
     typewriterElements.forEach(el => typeObserver.observe(el));
 
-    // ---- Parallax Depth Scrolling ----
-    if (window.innerWidth > 768) {
-        const sections = document.querySelectorAll('section');
-        sections.forEach((section, i) => {
-            // Alternate speeds: odd sections move slower for depth
-            const speed = (i % 2 === 0) ? 0.03 : -0.02;
-            section.dataset.parallaxSpeed = speed;
-            section.classList.add('parallax-layer');
-        });
-
-        let ticking = false;
-        window.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    const scrollY = window.scrollY;
-                    sections.forEach(section => {
-                        const speed = parseFloat(section.dataset.parallaxSpeed);
-                        const rect = section.getBoundingClientRect();
-                        const offset = (rect.top + rect.height / 2 - window.innerHeight / 2) * speed;
-                        section.style.transform = `translateY(${offset}px)`;
-                    });
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        }, { passive: true });
-    }
+    /* Parallax Depth Scrolling removed — was setting inline transform on every
+       section every frame (~6 getBoundingClientRect + style writes per scroll tick).
+       Visual effect was ±3-5px, barely perceptible, but cost was high. */
 }
 
 /* ============================================
@@ -363,6 +369,42 @@ function initSmoothScroll() {
 }
 
 /* ============================================
+   THEME TOGGLE (Dark / Light)
+   ============================================ */
+function initThemeToggle() {
+    const toggle = document.getElementById('themeToggle');
+    if (!toggle) return;
+
+    const html = document.documentElement;
+
+    // If no data-theme set yet (inline script in head didn't run), apply default
+    if (!html.getAttribute('data-theme')) {
+        const saved = localStorage.getItem('theme');
+        if (saved) {
+            html.setAttribute('data-theme', saved);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            html.setAttribute('data-theme', 'light');
+        } else {
+            html.setAttribute('data-theme', 'dark');
+        }
+    }
+
+    toggle.addEventListener('click', () => {
+        const current = html.getAttribute('data-theme');
+        const next = current === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+    });
+
+    // Listen for system theme changes (only when user hasn't set manual preference)
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            html.setAttribute('data-theme', e.matches ? 'light' : 'dark');
+        }
+    });
+}
+
+/* ============================================
    PARALLAX & MOUSE EFFECTS
    ============================================ */
 function initParallax() {
@@ -371,9 +413,10 @@ function initParallax() {
 
     const codeWindow = document.querySelector('.code-window');
 
-    // Subtle tilt on the code-window
+    // Subtle tilt on the code-window — IO-gated to pause when hero is off-screen
     if (codeWindow) {
         let tiltX = 0, tiltY = 0, targetTiltX = 0, targetTiltY = 0;
+        let tiltRunning = false;
 
         document.addEventListener('mousemove', (e) => {
             const centerX = window.innerWidth / 2;
@@ -383,29 +426,36 @@ function initParallax() {
         }, { passive: true });
 
         function animateTilt() {
+            if (!tiltRunning) return;
             tiltX += (targetTiltX - tiltX) * 0.08;
             tiltY += (targetTiltY - tiltY) * 0.08;
             codeWindow.style.transform = `perspective(1000px) rotateY(${tiltX}deg) rotateX(${tiltY}deg)`;
             requestAnimationFrame(animateTilt);
         }
+
+        // IntersectionObserver: only run tilt rAF when hero is visible
+        const heroSection = document.getElementById('hero');
+        if (heroSection) {
+            const tiltObserver = new IntersectionObserver((entries) => {
+                const wasRunning = tiltRunning;
+                tiltRunning = entries[0].isIntersecting;
+                if (tiltRunning && !wasRunning) requestAnimationFrame(animateTilt);
+            }, { threshold: 0, rootMargin: '100px' });
+            tiltObserver.observe(heroSection);
+        }
+        tiltRunning = true;
         requestAnimationFrame(animateTilt);
     }
 
-    // Parallax ambient glows — throttled
+    // Ambient glow parallax — via unified ScrollController
     const glows = document.querySelectorAll('.ambient-glow');
-    let glowTicking = false;
-    window.addEventListener('scroll', () => {
-        if (!glowTicking) {
-            requestAnimationFrame(() => {
-                const scrollY = window.scrollY;
-                glows.forEach((glow, i) => {
-                    glow.style.transform = `translateY(${scrollY * (i + 1) * 0.05}px)`;
-                });
-                glowTicking = false;
-            });
-            glowTicking = true;
-        }
-    }, { passive: true });
+    if (glows.length) {
+        ScrollController.add((scrollY) => {
+            for (let i = 0; i < glows.length; i++) {
+                glows[i].style.transform = `translate3d(0, ${scrollY * (i + 1) * 0.05}px, 0)`;
+            }
+        });
+    }
 }
 
 /* ============================================
@@ -426,28 +476,38 @@ function initCustomCursor() {
     if (!dot || !ring) return;
 
     // State
-    let mouseX = 0;
-    let mouseY = 0;
-    let ringX = 0;
-    let ringY = 0;
+    let mouseX = 0, mouseY = 0;
+    let ringX = 0, ringY = 0;
     let isVisible = false;
+    let ringAnimating = false;
+    let cursorScale = 1;
+
+    // Sizes (half-width offsets for centering via translate3d)
+    const DOT_HALF = 3;    // 6px / 2
+    const RING_HALF = 18;  // 36px / 2
 
     // LERP factor — lower = smoother trail
     const lerpFactor = 0.15;
 
-    // Track mouse position
+    // Track mouse position — GPU-composited via translate3d
     document.addEventListener('mousemove', (e) => {
         mouseX = e.clientX;
         mouseY = e.clientY;
 
-        // Dot follows instantly via direct positioning
-        dot.style.left = `${mouseX}px`;
-        dot.style.top = `${mouseY}px`;
+        // Dot follows instantly — translate3d avoids layout thrash
+        dot.style.transform = `translate3d(${mouseX - DOT_HALF}px, ${mouseY - DOT_HALF}px, 0)`;
 
         if (!isVisible) {
             isVisible = true;
             dot.classList.remove('cursor-dot--hidden');
             ring.classList.remove('cursor-ring--hidden');
+        }
+
+        // Wake ring LERP loop if idle
+        if (!ringAnimating) {
+            ringAnimating = true;
+            lastTime = performance.now();
+            requestAnimationFrame(animateRing);
         }
     }, { passive: true });
 
@@ -464,39 +524,44 @@ function initCustomCursor() {
         ring.classList.remove('cursor-ring--hidden');
     });
 
-    // LERP animation loop for the ring — frame-rate independent
+    // LERP animation loop for the ring — pauses when idle
     let lastTime = performance.now();
     function animateRing(now) {
-        const dt = Math.min((now - lastTime) / 16.67, 2); // normalize to 60fps baseline
+        const dt = Math.min((now - lastTime) / 16.67, 2);
         lastTime = now;
 
         ringX += (mouseX - ringX) * lerpFactor * dt;
         ringY += (mouseY - ringY) * lerpFactor * dt;
 
-        ring.style.left = `${ringX}px`;
-        ring.style.top = `${ringY}px`;
+        // translate3d for GPU compositing, scale for hover states
+        ring.style.transform = `translate3d(${ringX - RING_HALF}px, ${ringY - RING_HALF}px, 0) scale(${cursorScale})`;
+
+        // Pause loop when ring has caught up to mouse (idle detection)
+        if (Math.abs(mouseX - ringX) < 0.5 && Math.abs(mouseY - ringY) < 0.5) {
+            ringAnimating = false;
+            return;
+        }
 
         requestAnimationFrame(animateRing);
     }
     // Initialize ring position
     ringX = mouseX;
     ringY = mouseY;
-    requestAnimationFrame(animateRing);
 
     // --- Hover detection ---
-    // Interactive elements: links, buttons
     const interactiveElements = document.querySelectorAll('a, button, .btn, .social-btn, .pill, .nav__link, .nav__toggle');
-    // Card elements: skill-card, project-card
-    const cardElements = document.querySelectorAll('.skill-card, .project-card, .about__card');
+    const cardElements = document.querySelectorAll('.skill-card, .project-card, .about__card, .blog-card');
 
     interactiveElements.forEach(el => {
         el.addEventListener('mouseenter', () => {
             dot.classList.add('cursor-dot--hover');
             ring.classList.add('cursor-ring--hover');
+            cursorScale = 1.55;
         });
         el.addEventListener('mouseleave', () => {
             dot.classList.remove('cursor-dot--hover');
             ring.classList.remove('cursor-ring--hover');
+            cursorScale = 1;
         });
     });
 
@@ -504,10 +569,12 @@ function initCustomCursor() {
         el.addEventListener('mouseenter', () => {
             dot.classList.add('cursor-dot--hover');
             ring.classList.add('cursor-ring--card');
+            cursorScale = 2;
         });
         el.addEventListener('mouseleave', () => {
             dot.classList.remove('cursor-dot--hover');
             ring.classList.remove('cursor-ring--card');
+            cursorScale = 1;
         });
     });
 }
@@ -552,10 +619,11 @@ function initParticleNetwork() {
     const isMobile = window.innerWidth < 768;
     const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
 
-    // Adaptive config based on device
+    // Adaptive config — reduced counts and no connections on mobile
     const CONFIG = {
-        particleCount: isMobile ? 30 : isTablet ? 50 : Math.min(80, Math.floor(window.innerWidth / 18)),
-        connectionDistance: isMobile ? 100 : 140,
+        particleCount: isMobile ? 20 : isTablet ? 40 : Math.min(70, Math.floor(window.innerWidth / 20)),
+        connectionDistance: 140,
+        drawConnections: !isMobile, // skip connections on mobile entirely
         mouseRadius: 180,
         mouseRepelStrength: 0.02,
         particleSpeed: 0.3,
@@ -567,7 +635,7 @@ function initParticleNetwork() {
         tealColor: { r: 0, g: 206, b: 201 },
     };
 
-    // Pre-cache color strings to avoid per-frame concatenation
+    // Pre-cache color strings
     const accentStr = `${CONFIG.accentColor.r}, ${CONFIG.accentColor.g}, ${CONFIG.accentColor.b}`;
     const tealStr = `${CONFIG.tealColor.r}, ${CONFIG.tealColor.g}, ${CONFIG.tealColor.b}`;
 
@@ -575,6 +643,13 @@ function initParticleNetwork() {
     let particles = [];
     let mouse = { x: -1000, y: -1000 };
     let animId;
+    let isRunning = true;
+    let reducedRate = false; // true when scrolled far, halves frame rate
+
+    // Frame-rate throttle for mobile (30fps) and reduced mode
+    const TARGET_INTERVAL = isMobile ? 33.33 : 0; // 30fps on mobile, uncapped on desktop
+    let lastFrameTime = 0;
+    let frameSkip = 0;
 
     // Debounced resize
     let resizeTimeout;
@@ -587,11 +662,11 @@ function initParticleNetwork() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             resize();
-            const newCount = isMobile ? 30 : isTablet ? 50 : Math.min(80, Math.floor(window.innerWidth / 18));
+            const newCount = isMobile ? 20 : isTablet ? 40 : Math.min(70, Math.floor(window.innerWidth / 20));
             if (Math.abs(newCount - particles.length) > 10) {
                 particles = createParticles(newCount);
             }
-        }, 200);
+        }, 250);
     }, { passive: true });
 
     // Mouse tracking — skip on mobile
@@ -606,6 +681,11 @@ function initParticleNetwork() {
             mouse.y = -1000;
         });
     }
+
+    // Reduce frame rate when user scrolls far from top
+    ScrollController.add((scrollY) => {
+        reducedRate = scrollY > window.innerHeight * 1.5;
+    });
 
     // Create particles with pre-cached color strings
     function createParticles(count) {
@@ -627,7 +707,7 @@ function initParticleNetwork() {
     }
     particles = createParticles(CONFIG.particleCount);
 
-    // Spatial grid for O(n) connection checks
+    // Spatial grid for O(n) connection checks — only used on desktop
     const gridCellSize = CONFIG.connectionDistance;
     let grid = {};
 
@@ -660,18 +740,31 @@ function initParticleNetwork() {
         return neighbors;
     }
 
-    // Animation loop — optimized for 120Hz
+    // Animation loop — frame-rate capped and visibility-aware
     const connDistSq = CONFIG.connectionDistance * CONFIG.connectionDistance;
     const mouseRadSq = CONFIG.mouseRadius * CONFIG.mouseRadius;
 
-    function animate() {
+    function animate(now) {
+        animId = requestAnimationFrame(animate);
+
+        if (!isRunning) return;
+
+        // Frame-rate throttle: mobile = 30fps, reducedRate = skip every other frame
+        if (TARGET_INTERVAL && now - lastFrameTime < TARGET_INTERVAL) return;
+        if (reducedRate) {
+            frameSkip++;
+            if (frameSkip % 3 !== 0) return; // ~20fps when scrolled far
+        }
+        lastFrameTime = now;
+
         ctx.clearRect(0, 0, width, height);
-        buildGrid();
+
+        if (CONFIG.drawConnections) buildGrid();
 
         for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
 
-            // Mouse repulsion — squared distance (no sqrt)
+            // Mouse repulsion
             if (!isMobile) {
                 const dx = p.x - mouse.x;
                 const dy = p.y - mouse.y;
@@ -712,38 +805,41 @@ function initParticleNetwork() {
             ctx.fillStyle = p.fillStyle;
             ctx.fill();
 
-            // Draw connections via spatial grid
-            const neighbors = getNeighborIndices(p);
-            for (let k = 0; k < neighbors.length; k++) {
-                const j = neighbors[k];
-                if (j <= i) continue;
-                const p2 = particles[j];
-                const cdx = p.x - p2.x;
-                const cdy = p.y - p2.y;
-                const dSq = cdx * cdx + cdy * cdy;
+            // Draw connections — desktop only
+            if (CONFIG.drawConnections) {
+                const neighbors = getNeighborIndices(p);
+                for (let k = 0; k < neighbors.length; k++) {
+                    const j = neighbors[k];
+                    if (j <= i) continue;
+                    const p2 = particles[j];
+                    const cdx = p.x - p2.x;
+                    const cdy = p.y - p2.y;
+                    const dSq = cdx * cdx + cdy * cdy;
 
-                if (dSq < connDistSq) {
-                    const opacity = (1 - Math.sqrt(dSq) / CONFIG.connectionDistance) * CONFIG.lineOpacity;
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `rgba(${accentStr}, ${opacity})`;
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
+                    if (dSq < connDistSq) {
+                        const opacity = (1 - Math.sqrt(dSq) / CONFIG.connectionDistance) * CONFIG.lineOpacity;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = `rgba(${accentStr}, ${opacity})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
                 }
             }
         }
-
-        animId = requestAnimationFrame(animate);
     }
-    animate();
+    requestAnimationFrame(animate);
 
     // Pause when tab is not visible
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
+            isRunning = false;
             cancelAnimationFrame(animId);
         } else {
-            animate();
+            isRunning = true;
+            lastFrameTime = performance.now();
+            requestAnimationFrame(animate);
         }
     });
 }
