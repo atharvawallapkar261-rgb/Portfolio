@@ -548,8 +548,8 @@ button {
 }
 
 .btn--primary:hover {
-    transform: translateY(-8px) scale(1.01);
-    box-shadow: 0 12px 30px rgba(108,92,231,0.45);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 8px 25px rgba(108,92,231,0.4);
 }
 
 .btn--primary:active {
@@ -566,7 +566,7 @@ button {
     border-color: var(--accent-primary);
     color: var(--accent-primary-light);
     background: rgba(108,92,231,0.05);
-    transform: translateY(-8px) scale(1.01);
+    transform: translateY(-4px) scale(1.01);
 }
 
 .btn--ghost {
@@ -669,6 +669,7 @@ button {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    color: var(--accent-primary);
 }
 
 .hero__subtitle {
@@ -892,7 +893,7 @@ button {
 
 .skill-card:hover {
     border-color: var(--border-accent);
-    transform: translateY(-8px) scale(1.01);
+    transform: translateY(-4px) scale(1.01);
     box-shadow: var(--shadow-glow-sm);
 }
 
@@ -1056,7 +1057,7 @@ button {
 
 .project-card:hover {
     border-color: var(--border-accent);
-    transform: translateY(-8px) scale(1.01);
+    transform: translateY(-4px) scale(1.01);
     box-shadow: var(--shadow-lg), var(--shadow-glow-sm);
 }
 
@@ -1203,7 +1204,7 @@ button {
 
 .about__card:hover {
     border-color: var(--border-accent);
-    transform: translateY(-8px) scale(1.01);
+    transform: translateY(-4px) scale(1.01);
     box-shadow: var(--shadow-glow-sm);
 }
 
@@ -2138,21 +2139,14 @@ body.is-loading {
         min-height: 48px;
     }
 
-    /* Reduce blur on mobile to save GPU */
-    .aurora__blob {
-        filter: blur(60px);
-    }
-
-    .ambient-glow {
-        filter: blur(80px);
-    }
+    /* Blur intentionally omitted — pre-softened gradients are used instead
+       to avoid expensive per-frame filter rasterization on mobile GPUs */
 }
 
-/* Fast touch scrolling */
+/* Touch scrolling */
 .nav__links,
 .skills__grid,
 .projects__grid {
-    -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
 }
 

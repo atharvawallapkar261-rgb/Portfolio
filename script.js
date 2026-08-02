@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initCustomCursor();
         initCardSpotlight();
         initParticleNetwork();
+        initPlaceholderLinks();
     });
 });
 
@@ -481,6 +482,7 @@ function initCustomCursor() {
     let isVisible = false;
     let ringAnimating = false;
     let cursorScale = 1;
+    let lastTime = performance.now();
 
     // Sizes (half-width offsets for centering via translate3d)
     const DOT_HALF = 3;    // 6px / 2
@@ -525,7 +527,6 @@ function initCustomCursor() {
     });
 
     // LERP animation loop for the ring — pauses when idle
-    let lastTime = performance.now();
     function animateRing(now) {
         const dt = Math.min((now - lastTime) / 16.67, 2);
         lastTime = now;
@@ -842,4 +843,72 @@ function initParticleNetwork() {
             requestAnimationFrame(animate);
         }
     });
+}
+
+/* ============================================
+   PLACEHOLDER LINK HANDLERS
+   Graceful fallback for resume & demo links
+   ============================================ */
+function initPlaceholderLinks() {
+    // Resume links
+    document.querySelectorAll('.resume-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            showToast('Resume will be available soon!');
+        });
+    });
+
+    // Demo links
+    document.querySelectorAll('.demo-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            showToast('Live demo coming soon!');
+        });
+    });
+}
+
+/* Simple toast notification */
+function showToast(message) {
+    // Remove existing toast if any
+    const existing = document.querySelector('.toast-notification');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--bg-card, #151c2c);
+        color: var(--text-primary, #e8ecf4);
+        border: 1px solid var(--border-medium, rgba(255,255,255,0.1));
+        padding: 14px 28px;
+        border-radius: 12px;
+        font-family: var(--font-primary, 'Inter', sans-serif);
+        font-size: 0.875rem;
+        font-weight: 500;
+        z-index: 10001;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        backdrop-filter: blur(12px);
+        opacity: 0;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        pointer-events: none;
+    `;
+
+    document.body.appendChild(toast);
+
+    // Trigger entrance animation
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    });
+
+    // Auto-dismiss after 2.5s
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
 }
